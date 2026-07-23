@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reconciled Meetings Dashboard</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --primary: #2563eb;
+      --border: #e2e8f0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    .loading, .error {
+      padding: 1.5rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .error {
+      color: #dc2626;
+      border: 1px solid #fca5a5;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+
+    .title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.5rem 1rem;
+      font-size: 0.9rem;
+      color: #475569;
+      margin-bottom: 0.75rem;
+    }
+
+    .meta-item strong {
+      color: var(--text);
+    }
+
+    .sources {
+      font-size: 0.8rem;
+      color: #64748b;
+      border-top: 1px solid var(--border);
+      padding-top: 0.5rem;
+      margin-top: 0.5rem;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .notes {
+      font-size: 0.9rem;
+      background: #f1f5f9;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TELL JINJA2 TO IGNORE VUE SYNTAX -->
+{% raw %}
+<div id="app" class="container">
+  <header>
+    <h1>📅 Reconciled Meetings</h1>
+    <p>Viewing <strong>{{ meetings.length }}</strong> merged meeting records</p>
+  </header>
+
+  <div v-if="loading" class="loading">
+    ⏳ Fetching and reconciling meeting data...
+  </div>
+
+  <div v-else-if="error" class="error">
+    ❌ {{ error }}
+  </div>
+
+  <div v-else>
+    <div v-for="meeting in meetings" :key="meeting.unified_id" class="card">
+      <div class="card-header">
+        <h2 class="title">{{ meeting.title }}</h2>
+        <span class="badge">{{ meeting.status || 'Scheduled' }}</span>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <strong>Date:</strong> {{ meeting.date || 'N/A' }}
+        </div>
+        <div class="meta-item">
+          <strong>Organizer:</strong> {{ meeting.organizer || 'Unassigned' }}
+        </div>
+        
+        <!-- SAFE CLIENT VALIDATION -->
+        <div class="meta-item">
+          <strong>Client:</strong> 
+          <template v-if="meeting.client && (meeting.client.name || meeting.client.company)">
+            <span v-if="meeting.client.name">{{ meeting.client.name }}</span>
+            <span v-if="meeting.client.company"> ({{ meeting.client.company }})</span>
+          </template>
+          <template v-else>
+            <span>Internal / Not Specified</span>
+          </template>
+        </div>
+
+        <div class="meta-item">
+          <strong>Location:</strong> {{ meeting.location.resolved_location || 'Not Specified' }}
+        </div>
+      </div>
+
+      <div v-if="meeting.notes" class="notes">
+        💡 {{ meeting.notes }}
+      </div>
+
+      <div class="sources">
+        <span>Unified ID: <code>{{ meeting.unified_id }}</code></span>
+        <span v-if="meeting.sources.calendar_id">📅 Calendar ID: {{ meeting.sources.calendar_id }}</span>
+        <span v-if="meeting.sources.crm_id">💼 CRM ID: {{ meeting.sources.crm_id }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endraw %}
+
+<script>
+  const { createApp, ref, onMounted } = Vue;
+
+  createApp({
+    setup() {
+      const meetings = ref([]);
+      const loading = ref(true);
+      const error = ref(null);
+
+      const fetchMeetings = async () => {
+        try {
+          const response = await fetch('/api/data');
+          if (!response.ok) {
+            throw new Error(`Failed to load data (Status: ${response.status})`);
+          }
+          const result = await response.json();
+          meetings.value = result.data || [];
+        } catch (err) {
+          error.value = err.message;
+        } finally {
+          loading.value = false;
+        }
+      };
+
+      onMounted(() => {
+        fetchMeetings();
+      });
+
+      return {
+        meetings,
+        loading,
+        error
+      };
+    }
+  }).mount('#app');
+</script>
+
+</body>
+</html>
